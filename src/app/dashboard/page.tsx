@@ -257,17 +257,11 @@ export default function DashboardPage() {
               </a>
             )}
 
-            {/* Account name + degree */}
+            {/* Account name */}
             <div className="hidden sm:flex flex-col items-end gap-0.5">
               <span className="text-sm font-semibold text-slate-200">
                 {session?.user?.name}
               </span>
-              {degreeName && (
-                <span className="text-xs text-slate-500 flex items-center gap-1">
-                  {degreeName}
-                  <a href="/select-degree?change=1" className="text-indigo-400 hover:text-indigo-300 underline ml-1">change</a>
-                </span>
-              )}
             </div>
 
             {/* Logout — far right */}
@@ -282,6 +276,22 @@ export default function DashboardPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        {/* Degree Card */}
+        {degreeName && (
+          <div className="bg-[#1c1f2e] rounded-2xl p-5 border border-white/[0.06] flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-1">Current Degree</p>
+              <p className="text-lg font-bold text-slate-100">{degreeName}</p>
+            </div>
+            <a
+              href="/select-degree?change=1"
+              className="text-sm bg-indigo-500/10 text-indigo-400 px-4 py-2 rounded-xl hover:bg-indigo-500/20 transition font-semibold border border-indigo-500/20"
+            >
+              Change
+            </a>
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className={`col-span-2 lg:col-span-1 bg-gradient-to-br ${gpaBg(overallGPA)} rounded-2xl p-5 text-white shadow-2xl`}>
