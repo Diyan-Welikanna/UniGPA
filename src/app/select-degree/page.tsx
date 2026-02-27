@@ -122,8 +122,11 @@ export default function SelectDegreePage() {
 
     // ── Case 1: already-committed degree (has subjects) — just switch degreeId ──
     if (committedIds.has(selectedId)) {
-      sessionStorage.removeItem(PENDING_DEGREE_KEY);
-      await fetch('/api/degrees', {
+      sessionStorage.setItem(PENDING_DEGREE_KEY, JSON.stringify({
+        id: selectedId, name: deg.name, totalYears: deg.totalYears,
+        semestersPerYear: deg.semestersPerYear, isCustom: deg.isCustom,
+      }));
+      fetch('/api/degrees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ degreeId: selectedId }),
@@ -136,8 +139,11 @@ export default function SelectDegreePage() {
     // ── Case 2: system degree selected with default years → commit immediately
     //    so subject templates get copied right now ──
     if (selectedId > 0 && !deg.isCustom && years === deg.totalYears) {
-      sessionStorage.removeItem(PENDING_DEGREE_KEY);
-      await fetch('/api/degrees', {
+      sessionStorage.setItem(PENDING_DEGREE_KEY, JSON.stringify({
+        id: selectedId, name: deg.name, totalYears: deg.totalYears,
+        semestersPerYear: deg.semestersPerYear, isCustom: deg.isCustom,
+      }));
+      fetch('/api/degrees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ degreeId: selectedId }),
