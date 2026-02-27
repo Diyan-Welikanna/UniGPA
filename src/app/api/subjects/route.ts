@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/db';
 import { z } from 'zod';
-
-const subjectSchema = z.object({
-  subject_name: z.string().min(1, 'Subject name is required'),
-  credits: z.number().min(0.5).max(10),
-  year: z.number().int().min(1).max(10),
-  semester: z.number().int().min(1).max(2)
-});
 
 // GET all subjects for logged-in user
 export async function GET(request: NextRequest) {
@@ -23,51 +16,45 @@ export async function GET(request: NextRequest) {
     const year = searchParams.get('year');
     const semester = searchParams.get('semester');
 
-    const subjects = await prisma.subject.findMany({
-      where: {
-        userId: parseInt(session.user.id),
-        ...(year && { year: parseInt(year) }),
-        ...(semester && { semester: parseInt(semester) })
-      },
-      include: {
-        result: true
-      },
-      orderBy: [
-        { year: 'asc' },
-        { semester: 'asc' },
-        { subjectName: 'asc' }
-      ]
-    });
+    let query = db
+      .from('subjects')
+      .select('*, result:results(*)')
+      .eq('user_id', parseInt(session.user.id))
+      .order('year', { ascending: true })
+      .order('semester', { ascending: true })
+      .order('subject_name', { ascending: true });
 
-    return NextResponse.json(subjects.map((subject: any) => ({
-      id: subject.id,
-      user_id: subject.userId,
-      subject_name: subject.subjectName,
-      credits: parseFloat(subject.credits.toString()),
-      year: subject.year,
-      semester: subject.semester,
-      created_at: subject.createdAt,
-      updated_at: subject.updatedAt,
-      result: subject.result ? {
-        id: subject.result.id,
-        subject_id: subject.result.subjectId,
-        grade_point: parseFloat(subject.result.gradePoint.toString()),
-        status: subject.result.status,
-        created_at: subject.result.createdAt,
-        updated_at: subject.result.updatedAt
-      } : undefined
+    if (year) query = query.eq('year', parseInt(year));
+    if (semester) query = query.eq('semester', parseInt(semester));
+
+    const { data: subjects, error } = await query;
+    if (error) throw error;
+
+    return NextResponse.json((subjects ?? []).map((s: any) => ({
+      id: s.id,
+      user_id: s.user_id,
+      subject_name: s.subject_name,
+      credits: parseFloat(s.credits),
+      year: s.year,
+      semester: s.semester,
+      created_at: s.created_at,
+      updated_at: s.updated_at,
+      result: s.result ? {
+        id: s.result.id,
+        subject_id: s.result.subject_id,
+        grade_point: parseFloat(s.result.grade_point),
+        status: s.result.status,
+        created_at: s.result.created_at,
+        updated_at: s.result.updated_at,
+      } : undefined,
     })));
   } catch (error) {
     console.error('GET subjects error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 // POST create new subject
-// Body may include _pendingDegree: PendingDegree to commit before saving subject
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -84,41 +71,43 @@ export async function POST(request: NextRequest) {
       let degreeId: number;
 
       if (pd.pendingCreate) {
-        // Create the degree record now (custom copy or brand-new custom)
-        const deg = await (prisma as any).degree.create({
-          data: {
-            name: pd.pendingCreate.name,
-            totalYears: pd.pendingCreate.totalYears,
-            semestersPerYear: pd.pendingCreate.semestersPerYear,
-            isCustom: true,
-            createdByUserId: userId,
-          },
-        });
+        const { data: deg, error } = await db.from('degrees').insert({
+          name: pd.pendingCreate.name,
+          total_years: pd.pendingCreate.totalYears,
+          semesters_per_year: pd.pendingCreate.semestersPerYear,
+          is_custom: true,
+          created_by_user_id: userId,
+        }).select().single();
+        if (error) throw error;
         degreeId = deg.id;
       } else {
         degreeId = pd.id;
       }
 
-      await (prisma as any).user.update({ where: { id: userId }, data: { degreeId } });
+      await db.from('users').update({ degree_id: degreeId }).eq('id', userId);
     }
-    // ──────────────────────────────────────────────────────────────────────
 
-    const validatedData = subjectSchema.parse({
+    const validatedData = z.object({
+      subject_name: z.string().min(1),
+      credits: z.number().min(0.5).max(10),
+      year: z.number().int().min(1).max(10),
+      semester: z.number().int().min(1).max(2),
+    }).parse({
       subject_name: body.subject_name,
       credits: body.credits,
       year: body.year,
       semester: body.semester,
     });
 
-    const subject = await prisma.subject.create({
-      data: {
-        userId,
-        subjectName: validatedData.subject_name,
-        credits: validatedData.credits,
-        year: validatedData.year,
-        semester: validatedData.semester,
-      },
-    });
+    const { data: subject, error } = await db.from('subjects').insert({
+      user_id: userId,
+      subject_name: validatedData.subject_name,
+      credits: validatedData.credits,
+      year: validatedData.year,
+      semester: validatedData.semester,
+    }).select().single();
+
+    if (error) throw error;
 
     return NextResponse.json(
       { message: 'Subject created successfully', subjectId: subject.id },

@@ -1,7 +1,7 @@
 import NextAuth, { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/db';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -17,28 +17,26 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          const user = await (prisma as any).user.findUnique({
-            where: { username: credentials.username },
-          }) as any;
+          const { data: user, error } = await db
+            .from('users')
+            .select('*')
+            .eq('username', credentials.username)
+            .single();
 
-          if (!user) {
-            return null;
-          }
+          if (error || !user) return null;
 
           const isValidPassword = await bcrypt.compare(
             credentials.password,
             user.password
           );
 
-          if (!isValidPassword) {
-            return null;
-          }
+          if (!isValidPassword) return null;
 
           return {
             id: user.id.toString(),
             name: user.name,
             email: user.email,
-            degreeId: user.degreeId ?? null,
+            degreeId: user.degree_id ?? null,
             role: user.role ?? 'USER',
           };
         } catch (error) {

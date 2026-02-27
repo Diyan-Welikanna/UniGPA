@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/db';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -16,44 +16,33 @@ export async function POST(request: NextRequest) {
     const validatedData = registerSchema.parse(body);
 
     // Check if email already registered
-    const existingEmail = await prisma.user.findUnique({
-      where: { email: validatedData.email }
-    });
-    if (existingEmail) {
-      return NextResponse.json({ error: 'Email already registered' }, { status: 400 });
-    }
+    const { data: existingEmail } = await db.from('users').select('id').eq('email', validatedData.email).single();
+    if (existingEmail) return NextResponse.json({ error: 'Email already registered' }, { status: 400 });
 
     // Check if username already taken
-    const existingUsername = await (prisma as any).user.findUnique({
-      where: { username: validatedData.username }
-    });
-    if (existingUsername) {
-      return NextResponse.json({ error: 'Username already taken' }, { status: 400 });
-    }
+    const { data: existingUsername } = await db.from('users').select('id').eq('username', validatedData.username).single();
+    if (existingUsername) return NextResponse.json({ error: 'Username already taken' }, { status: 400 });
 
     // Hash password
     const hashedPassword = await bcrypt.hash(validatedData.password, 10);
 
     // Create user
-    const user = await (prisma as any).user.create({
-      data: {
-        name: validatedData.name,
-        username: validatedData.username,
-        email: validatedData.email,
-        password: hashedPassword,
-        isVerified: true
-      }
+    const { error } = await db.from('users').insert({
+      name: validatedData.name,
+      username: validatedData.username,
+      email: validatedData.email,
+      password: hashedPassword,
+      is_verified: true,
+      role: 'USER',
     });
 
-    return NextResponse.json(
-      { message: 'Account created! You can now log in.' },
-      { status: 201 }
-    );
-  } catch (error: any) {
-    if (error.code === 'P2002') {
-      const field = error.meta?.target?.includes('username') ? 'Username' : 'Email';
-      return NextResponse.json({ error: `${field} already exists` }, { status: 400 });
+    if (error) {
+      console.error('Insert error:', error);
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
+
+    return NextResponse.json({ message: 'Account created! You can now log in.' }, { status: 201 });
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
     }
