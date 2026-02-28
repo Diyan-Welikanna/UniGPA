@@ -233,7 +233,7 @@ export default function AdminPage() {
                     onChange={(e) => setDegreeForm((f) => ({ ...f, totalYears: e.target.value }))}
                     className="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
                   >
-                    {[2,3,4,5,6].map((y) => <option key={y} value={y} className="bg-[#1c1f2e]">{y} years</option>)}
+                    {[1,2,3,4,5,6].map((y) => <option key={y} value={y} className="bg-[#1c1f2e]">{y} {y === 1 ? 'year' : 'years'}</option>)}
                   </select>
                 </div>
                 <div>
