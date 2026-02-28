@@ -73,30 +73,9 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    // ── Commit pending degree if provided ──────────────────────────────────
-    let resolvedDegreeId: number | null = session.user.degreeId ? parseInt(String(session.user.degreeId)) : null;
-
-    if (body._pendingDegree && !session.user.degreeId) {
-      const pd = body._pendingDegree;
-      let degreeId: number;
-
-      if (pd.pendingCreate) {
-        const { data: deg, error } = await db.from('degrees').insert({
-          name: pd.pendingCreate.name,
-          total_years: pd.pendingCreate.totalYears,
-          semesters_per_year: pd.pendingCreate.semestersPerYear,
-          is_custom: true,
-          created_by_user_id: userId,
-        }).select().single();
-        if (error) throw error;
-        degreeId = deg.id;
-      } else {
-        degreeId = pd.id;
-      }
-
-      await db.from('users').update({ degree_id: degreeId }).eq('id', userId);
-      resolvedDegreeId = degreeId;
-    }
+    // Get the user's current degree_id from DB (always committed before subjects are added now)
+    const { data: user } = await db.from('users').select('degree_id').eq('id', userId).single();
+    const resolvedDegreeId = user?.degree_id;
 
     if (!resolvedDegreeId) {
       return NextResponse.json({ error: 'No degree selected' }, { status: 400 });

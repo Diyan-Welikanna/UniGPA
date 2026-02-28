@@ -154,26 +154,35 @@ export default function SelectDegreePage() {
     }
 
     // ── Case 3: custom new degree (tempId < 0) or system degree with overridden years
-    //    → defer via sessionStorage so dashboard can create it on first subject ──
-    const pending: PendingDegree = selectedId < 0
-      ? {
-          id: null,
-          name: deg.name,
-          totalYears: years,
-          semestersPerYear: deg.semestersPerYear,
-          isCustom: true,
-          pendingCreate: { name: deg.name, totalYears: years, semestersPerYear: deg.semestersPerYear },
-        }
-      : {
-          id: selectedId,
-          name: deg.name,
-          totalYears: years,
-          semestersPerYear: deg.semestersPerYear,
-          isCustom: deg.isCustom,
-          pendingCreate: { name: deg.name, totalYears: years, semestersPerYear: deg.semestersPerYear },
-        };
+    //    → create/select the degree immediately so users.degree_id is updated before dashboard loads ──
+    let resolvedDegreeId: number;
 
-    sessionStorage.setItem(PENDING_DEGREE_KEY, JSON.stringify(pending));
+    if (selectedId < 0) {
+      // Brand-new custom degree — create it now
+      const res = await fetch('/api/degrees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', name: deg.name, totalYears: years, semestersPerYear: deg.semestersPerYear }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? 'Failed to create degree'); setIsSaving(false); return; }
+      resolvedDegreeId = data.degree.id;
+    } else {
+      // Existing system degree with year override — select it to update users.degree_id
+      resolvedDegreeId = selectedId;
+    }
+
+    // Now link user to this degree (copies templates if none exist for it)
+    await fetch('/api/degrees', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ degreeId: resolvedDegreeId }),
+    });
+
+    sessionStorage.setItem(PENDING_DEGREE_KEY, JSON.stringify({
+      id: resolvedDegreeId, name: deg.name, totalYears: years,
+      semestersPerYear: deg.semestersPerYear, isCustom: deg.isCustom,
+    }));
     setIsSaving(false);
     router.replace('/dashboard');
   };

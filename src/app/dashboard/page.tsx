@@ -156,21 +156,12 @@ export default function DashboardPage() {
         year: parseInt(fd.get('year') as string),
         semester: parseInt(fd.get('semester') as string),
       };
-      // Attach pending degree on first subject so API can commit it
-      if (pendingDegree && !session?.user?.degreeId) {
-        body._pendingDegree = pendingDegree;
-      }
       const res = await fetch('/api/subjects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        // Clear pending degree from sessionStorage once committed
-        if (pendingDegree && !session?.user?.degreeId) {
-          try { sessionStorage.removeItem(PENDING_DEGREE_KEY); } catch {}
-          setPendingDegree(null);
-        }
         setShowAddSubject(false);
         fetchSubjects();
       }
