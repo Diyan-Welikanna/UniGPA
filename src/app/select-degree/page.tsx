@@ -126,7 +126,7 @@ export default function SelectDegreePage() {
         id: selectedId, name: deg.name, totalYears: deg.totalYears,
         semestersPerYear: deg.semestersPerYear, isCustom: deg.isCustom,
       }));
-      fetch('/api/degrees', {
+      await fetch('/api/degrees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ degreeId: selectedId }),
@@ -143,7 +143,7 @@ export default function SelectDegreePage() {
         id: selectedId, name: deg.name, totalYears: deg.totalYears,
         semestersPerYear: deg.semestersPerYear, isCustom: deg.isCustom,
       }));
-      fetch('/api/degrees', {
+      await fetch('/api/degrees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ degreeId: selectedId }),

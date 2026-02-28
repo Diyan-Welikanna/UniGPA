@@ -4,7 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { db } from '@/lib/db';
 import { z } from 'zod';
 
-// GET all subjects for logged-in user
+// GET all subjects for logged-in user, filtered by their current degree
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -12,14 +12,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userId = parseInt(session.user.id);
     const { searchParams } = new URL(request.url);
     const year = searchParams.get('year');
     const semester = searchParams.get('semester');
 
+    // Get the user's current degree_id
+    const { data: user } = await db.from('users').select('degree_id').eq('id', userId).single();
+    const degreeId = user?.degree_id;
+
+    if (!degreeId) return NextResponse.json([]);
+
     let query = db
       .from('subjects')
       .select('*, result:results(*)')
-      .eq('user_id', parseInt(session.user.id))
+      .eq('user_id', userId)
+      .eq('degree_id', degreeId)
       .order('year', { ascending: true })
       .order('semester', { ascending: true })
       .order('subject_name', { ascending: true });
@@ -66,6 +74,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // ── Commit pending degree if provided ──────────────────────────────────
+    let resolvedDegreeId: number | null = session.user.degreeId ? parseInt(String(session.user.degreeId)) : null;
+
     if (body._pendingDegree && !session.user.degreeId) {
       const pd = body._pendingDegree;
       let degreeId: number;
@@ -85,6 +95,11 @@ export async function POST(request: NextRequest) {
       }
 
       await db.from('users').update({ degree_id: degreeId }).eq('id', userId);
+      resolvedDegreeId = degreeId;
+    }
+
+    if (!resolvedDegreeId) {
+      return NextResponse.json({ error: 'No degree selected' }, { status: 400 });
     }
 
     const validatedData = z.object({
@@ -101,6 +116,7 @@ export async function POST(request: NextRequest) {
 
     const { data: subject, error } = await db.from('subjects').insert({
       user_id: userId,
+      degree_id: resolvedDegreeId,
       subject_name: validatedData.subject_name,
       credits: validatedData.credits,
       year: validatedData.year,

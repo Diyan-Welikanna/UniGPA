@@ -12,8 +12,9 @@ export async function GET(request: NextRequest) {
     if (searchParams.get('withSubjects') === '1') {
       if (!userId) return NextResponse.json([]);
       const { data: user } = await db.from('users').select('degree_id').eq('id', userId).single();
-      const { count } = await db.from('subjects').select('id', { count: 'exact', head: true }).eq('user_id', userId);
-      const ids: number[] = user?.degree_id && (count ?? 0) > 0 ? [user.degree_id] : [];
+      if (!user?.degree_id) return NextResponse.json([]);
+      const { count } = await db.from('subjects').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('degree_id', user.degree_id);
+      const ids: number[] = (count ?? 0) > 0 ? [user.degree_id] : [];
       return NextResponse.json(ids);
     }
 
@@ -109,13 +110,15 @@ export async function POST(request: NextRequest) {
 
     await db.from('users').update({ degree_id: degreeId }).eq('id', userId);
 
+    // Only copy templates if user has no subjects for this degree yet
     let copiedCount = 0;
     if (degree.subjectTemplates?.length > 0) {
-      const { count: existing } = await db.from('subjects').select('id', { count: 'exact', head: true }).eq('user_id', userId);
+      const { count: existing } = await db.from('subjects').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('degree_id', degreeId);
       if ((existing ?? 0) === 0) {
         const { error: insertError } = await db.from('subjects').insert(
           degree.subjectTemplates.map((t: any) => ({
             user_id: userId,
+            degree_id: degreeId,
             subject_name: t.subject_name,
             credits: t.credits,
             year: t.year,

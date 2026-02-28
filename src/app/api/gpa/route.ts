@@ -19,10 +19,16 @@ export async function GET(request: NextRequest) {
     const years = searchParams.get('years')?.split(',').map(Number);
     const includeIncomplete = searchParams.get('includeIncomplete') === 'true';
 
+    // Get user's current degree_id so we only calculate GPA for the active degree
+    const { data: user } = await db.from('users').select('degree_id').eq('id', parseInt(session.user.id)).single();
+    const degreeId = user?.degree_id;
+    if (!degreeId) return NextResponse.json({ error: 'No degree selected' }, { status: 400 });
+
     const { data: subjectsData, error } = await db
       .from('subjects')
       .select('*, result:results(*)')
       .eq('user_id', parseInt(session.user.id))
+      .eq('degree_id', degreeId)
       .order('year').order('semester').order('subject_name');
 
     if (error) throw error;
