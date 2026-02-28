@@ -17,10 +17,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(ids);
     }
 
-    let query = db.from('degrees').select('*, subjectTemplates:degree_subject_templates(count)');
-    if (userId) {
-      // return non-custom + user's own custom
-    }
     const { data: degrees, error } = await db
       .from('degrees')
       .select('*, _count:degree_subject_templates(count)')
@@ -102,7 +98,8 @@ export async function POST(request: NextRequest) {
     if (!degreeId || typeof degreeId !== 'number') return NextResponse.json({ error: 'degreeId is required' }, { status: 400 });
 
     const { data: rawDegree } = await db.from('degrees').select('*, subjectTemplates:degree_subject_templates(*)').eq('id', degreeId).single();
-    if (!rawDegree) return NextResponse.json({ error: 'Degree not found' }, { status: 404 });\n
+    if (!rawDegree) return NextResponse.json({ error: 'Degree not found' }, { status: 404 });
+
     const degree = {
       id: rawDegree.id, name: rawDegree.name,
       totalYears: rawDegree.total_years, semestersPerYear: rawDegree.semesters_per_year,
