@@ -19,7 +19,17 @@ export async function GET(_req: NextRequest) {
   // Add subject counts
   const usersWithCount = await Promise.all((users ?? []).map(async (u: any) => {
     const { count } = await db.from('subjects').select('id', { count: 'exact', head: true }).eq('user_id', u.id);
-    return { ...u, _count: { subjects: count ?? 0 } };
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      isVerified: u.is_verified,
+      createdAt: u.created_at,
+      degreeId: u.degree_id,
+      degree: u.degree,
+      _count: { subjects: count ?? 0 },
+    };
   }));
 
   return NextResponse.json(usersWithCount);

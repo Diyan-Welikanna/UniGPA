@@ -22,7 +22,7 @@ interface DegreeInfo {
 const EMPTY_FORM = { subjectName: '', credits: '3', year: '1', semester: '1' };
 
 export default function AdminDegreeEditorPage() {
-  const { data: session, status } = useSession({ required: true });
+  const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();
   const degreeId = parseInt(params.id as string);

@@ -22,7 +22,15 @@ export async function GET(
     .order('year').order('semester').order('subject_name');
 
   if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  return NextResponse.json(templates ?? []);
+  return NextResponse.json((templates ?? []).map((t: any) => ({
+    id: t.id,
+    degreeId: t.degree_id,
+    subjectName: t.subject_name,
+    credits: parseFloat(t.credits),
+    year: t.year,
+    semester: t.semester,
+    createdAt: t.created_at,
+  })));
 }
 
 export async function POST(

@@ -26,7 +26,7 @@ interface SystemDegree {
 }
 
 export default function AdminPage() {
-  const { data: session, status } = useSession({ required: true });
+  const { data: session, status } = useSession();
   const router = useRouter();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [degrees, setDegrees] = useState<SystemDegree[]>([]);

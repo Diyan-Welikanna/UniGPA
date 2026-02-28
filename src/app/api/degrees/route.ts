@@ -29,7 +29,15 @@ export async function GET(request: NextRequest) {
       .order('name', { ascending: true });
 
     if (error) throw error;
-    return NextResponse.json(degrees ?? []);
+    return NextResponse.json((degrees ?? []).map((d: any) => ({
+      id: d.id,
+      name: d.name,
+      totalYears: d.total_years,
+      semestersPerYear: d.semesters_per_year,
+      isCustom: d.is_custom,
+      createdByUserId: d.created_by_user_id,
+      _count: { subjectTemplates: d._count?.[0]?.count ?? 0 },
+    })));
   } catch (error) {
     console.error('GET degrees error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -93,8 +101,14 @@ export async function POST(request: NextRequest) {
     const { degreeId } = body;
     if (!degreeId || typeof degreeId !== 'number') return NextResponse.json({ error: 'degreeId is required' }, { status: 400 });
 
-    const { data: degree } = await db.from('degrees').select('*, subjectTemplates:degree_subject_templates(*)').eq('id', degreeId).single();
-    if (!degree) return NextResponse.json({ error: 'Degree not found' }, { status: 404 });
+    const { data: rawDegree } = await db.from('degrees').select('*, subjectTemplates:degree_subject_templates(*)').eq('id', degreeId).single();
+    if (!rawDegree) return NextResponse.json({ error: 'Degree not found' }, { status: 404 });\n
+    const degree = {
+      id: rawDegree.id, name: rawDegree.name,
+      totalYears: rawDegree.total_years, semestersPerYear: rawDegree.semesters_per_year,
+      isCustom: rawDegree.is_custom,
+      subjectTemplates: rawDegree.subjectTemplates ?? [],
+    };
 
     await db.from('users').update({ degree_id: degreeId }).eq('id', userId);
 
