@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { z } from 'zod';
 
 // GET all subjects for logged-in user, filtered by their current degree
+// Merges actual user subjects with degree template subjects (templates shown as read-only placeholders)
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -23,6 +24,7 @@ export async function GET(request: NextRequest) {
 
     if (!degreeId) return NextResponse.json([]);
 
+    // Fetch user's actual subjects for this degree
     let query = db
       .from('subjects')
       .select('*, result:results(*)')
@@ -38,13 +40,14 @@ export async function GET(request: NextRequest) {
     const { data: subjects, error } = await query;
     if (error) throw error;
 
-    return NextResponse.json((subjects ?? []).map((s: any) => ({
+    const realSubjects = (subjects ?? []).map((s: any) => ({
       id: s.id,
       user_id: s.user_id,
       subject_name: s.subject_name,
       credits: parseFloat(s.credits),
       year: s.year,
       semester: s.semester,
+      isTemplate: false,
       created_at: s.created_at,
       updated_at: s.updated_at,
       result: s.result ? {
@@ -55,7 +58,47 @@ export async function GET(request: NextRequest) {
         created_at: s.result.created_at,
         updated_at: s.result.updated_at,
       } : undefined,
-    })));
+    }));
+
+    // Fetch degree templates
+    let tQuery = db
+      .from('degree_subject_templates')
+      .select('*')
+      .eq('degree_id', degreeId)
+      .order('year', { ascending: true })
+      .order('semester', { ascending: true })
+      .order('subject_name', { ascending: true });
+
+    if (year) tQuery = tQuery.eq('year', parseInt(year));
+    if (semester) tQuery = tQuery.eq('semester', parseInt(semester));
+
+    const { data: templates } = await tQuery;
+
+    // Build a set of real subject keys to avoid duplicating templates already materialized
+    const realKeys = new Set(realSubjects.map((s: any) =>
+      `${s.subject_name.toLowerCase()}|${s.year}|${s.semester}`
+    ));
+
+    const templateSubjects = (templates ?? [])
+      .filter((t: any) => !realKeys.has(`${t.subject_name.toLowerCase()}|${t.year}|${t.semester}`))
+      .map((t: any) => ({
+        id: null,
+        templateId: t.id,
+        user_id: userId,
+        subject_name: t.subject_name,
+        credits: parseFloat(t.credits),
+        year: t.year,
+        semester: t.semester,
+        isTemplate: true,
+        result: undefined,
+      }));
+
+    // Merge: real subjects first, then remaining templates, sorted by year/semester/name
+    const merged = [...realSubjects, ...templateSubjects].sort((a, b) =>
+      a.year - b.year || a.semester - b.semester || a.subject_name.localeCompare(b.subject_name)
+    );
+
+    return NextResponse.json(merged);
   } catch (error) {
     console.error('GET subjects error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

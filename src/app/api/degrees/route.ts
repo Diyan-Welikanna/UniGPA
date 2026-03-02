@@ -98,38 +98,18 @@ export async function POST(request: NextRequest) {
     const { degreeId } = body;
     if (!degreeId || typeof degreeId !== 'number') return NextResponse.json({ error: 'degreeId is required' }, { status: 400 });
 
-    const { data: rawDegree } = await db.from('degrees').select('*, subjectTemplates:degree_subject_templates(*)').eq('id', degreeId).single();
+    const { data: rawDegree } = await db.from('degrees').select('*').eq('id', degreeId).single();
     if (!rawDegree) return NextResponse.json({ error: 'Degree not found' }, { status: 404 });
 
     const degree = {
       id: rawDegree.id, name: rawDegree.name,
       totalYears: rawDegree.total_years, semestersPerYear: rawDegree.semesters_per_year,
       isCustom: rawDegree.is_custom,
-      subjectTemplates: rawDegree.subjectTemplates ?? [],
     };
 
     await db.from('users').update({ degree_id: degreeId }).eq('id', userId);
 
-    // Only copy templates if user has no subjects for this degree yet
-    let copiedCount = 0;
-    if (degree.subjectTemplates?.length > 0) {
-      const { count: existing } = await db.from('subjects').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('degree_id', degreeId);
-      if ((existing ?? 0) === 0) {
-        const { error: insertError } = await db.from('subjects').insert(
-          degree.subjectTemplates.map((t: any) => ({
-            user_id: userId,
-            degree_id: degreeId,
-            subject_name: t.subject_name,
-            credits: t.credits,
-            year: t.year,
-            semester: t.semester,
-          }))
-        );
-        if (!insertError) copiedCount = degree.subjectTemplates.length;
-      }
-    }
-
-    return NextResponse.json({ message: 'Degree selected', degree, copiedSubjects: copiedCount });
+    return NextResponse.json({ message: 'Degree selected', degree });
   } catch (error) {
     console.error('POST degree error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

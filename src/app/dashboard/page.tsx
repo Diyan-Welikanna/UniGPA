@@ -16,11 +16,13 @@ interface PendingDegree {
 }
 
 interface SubjectWithResult {
-  id: number;
+  id: number | null;
+  templateId?: number;
   subject_name: string;
   credits: number;
   year: number;
   semester: number;
+  isTemplate?: boolean;
   result?: {
     grade_point: number;
     status: string;
@@ -36,6 +38,7 @@ export default function DashboardPage() {
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [showAddGrade, setShowAddGrade] = useState(false);
   const [gradeSubjectId, setGradeSubjectId] = useState<number | null>(null);
+  const [gradeTemplateId, setGradeTemplateId] = useState<number | null>(null);
   const [editGrade, setEditGrade] = useState<{ grade_point: number; status: string } | null>(null);
   const [pendingDegree, setPendingDegree] = useState<PendingDegree | null>(null);
   const [showPublish, setShowPublish] = useState(false);
@@ -174,18 +177,24 @@ export default function DashboardPage() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     try {
+      const body: Record<string, unknown> = {
+        grade_point: parseFloat(fd.get('grade_point') as string),
+        status: fd.get('status'),
+      };
+      if (gradeTemplateId) {
+        body.templateId = gradeTemplateId;
+      } else {
+        body.subject_id = gradeSubjectId;
+      }
       const res = await fetch('/api/results', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subject_id: gradeSubjectId,
-          grade_point: parseFloat(fd.get('grade_point') as string),
-          status: fd.get('status'),
-        }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         setShowAddGrade(false);
         setGradeSubjectId(null);
+        setGradeTemplateId(null);
         setEditGrade(null);
         fetchSubjects();
       }
@@ -344,9 +353,14 @@ export default function DashboardPage() {
             ].filter((s) => s.items.length > 0);
 
             const SubjectRow = ({ subject }: { subject: SubjectWithResult }) => (
-              <div className="px-4 py-2.5 flex items-center gap-2 hover:bg-white/[0.03] transition">
+              <div className={`px-4 py-2.5 flex items-center gap-2 hover:bg-white/[0.03] transition ${subject.isTemplate ? 'opacity-70' : ''}`}>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-slate-200 text-sm truncate">{subject.subject_name}</p>
+                  <p className="font-medium text-slate-200 text-sm truncate">
+                    {subject.subject_name}
+                    {subject.isTemplate && (
+                      <span className="ml-1.5 text-[10px] bg-indigo-500/15 text-indigo-400 px-1.5 py-0.5 rounded font-medium align-middle">Template</span>
+                    )}
+                  </p>
                   <p className="text-xs text-slate-500">{subject.credits} cr</p>
                 </div>
                 <div className="shrink-0">
@@ -366,25 +380,37 @@ export default function DashboardPage() {
                 <div className="flex gap-1 shrink-0">
                   {!subject.result ? (
                     <button
-                      onClick={() => { setGradeSubjectId(subject.id); setEditGrade(null); setShowAddGrade(true); }}
+                      onClick={() => {
+                        if (subject.isTemplate) {
+                          setGradeSubjectId(null);
+                          setGradeTemplateId(subject.templateId!);
+                        } else {
+                          setGradeSubjectId(subject.id);
+                          setGradeTemplateId(null);
+                        }
+                        setEditGrade(null);
+                        setShowAddGrade(true);
+                      }}
                       className="text-xs bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded-lg hover:bg-indigo-500/20 transition font-medium border border-indigo-500/20"
                     >
                       + Grade
                     </button>
                   ) : (
                     <button
-                      onClick={() => { setGradeSubjectId(subject.id); setEditGrade(subject.result!); setShowAddGrade(true); }}
+                      onClick={() => { setGradeSubjectId(subject.id); setGradeTemplateId(null); setEditGrade(subject.result!); setShowAddGrade(true); }}
                       className="text-xs bg-amber-500/10 text-amber-400 px-2 py-1 rounded-lg hover:bg-amber-500/20 transition font-medium border border-amber-500/20"
                     >
                       Edit
                     </button>
                   )}
-                  <button
-                    onClick={() => handleDelete(subject.id)}
-                    className="text-xs bg-red-500/10 text-red-400 px-2 py-1 rounded-lg hover:bg-red-500/20 transition font-medium border border-red-500/20"
-                  >
-                    Delete
-                  </button>
+                  {!subject.isTemplate && (
+                    <button
+                      onClick={() => handleDelete(subject.id!)}
+                      className="text-xs bg-red-500/10 text-red-400 px-2 py-1 rounded-lg hover:bg-red-500/20 transition font-medium border border-red-500/20"
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -425,7 +451,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="divide-y divide-white/[0.04]">
                           {sem.items.map((subject) => (
-                            <SubjectRow key={subject.id} subject={subject} />
+                            <SubjectRow key={subject.id ?? `t-${subject.templateId}`} subject={subject} />
                           ))}
                         </div>
                       </div>
@@ -549,6 +575,7 @@ export default function DashboardPage() {
                   onClick={() => {
                     setShowAddGrade(false);
                     setGradeSubjectId(null);
+                    setGradeTemplateId(null);
                     setEditGrade(null);
                   }}
                   className="flex-1 bg-white/5 text-slate-400 py-2.5 rounded-xl hover:bg-white/10 transition font-medium text-sm border border-white/10"
