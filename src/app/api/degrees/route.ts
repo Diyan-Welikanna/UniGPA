@@ -11,11 +11,30 @@ export async function GET(request: NextRequest) {
 
     if (searchParams.get('withSubjects') === '1') {
       if (!userId) return NextResponse.json([]);
+
+      // 1. All degree_ids where user has at least one subject
+      const { data: rows } = await db
+        .from('subjects')
+        .select('degree_id')
+        .eq('user_id', userId)
+        .not('degree_id', 'is', null);
+
+      // 2. User's currently active degree_id
       const { data: user } = await db.from('users').select('degree_id').eq('id', userId).single();
-      if (!user?.degree_id) return NextResponse.json([]);
-      const { count } = await db.from('subjects').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('degree_id', user.degree_id);
-      const ids: number[] = (count ?? 0) > 0 ? [user.degree_id] : [];
-      return NextResponse.json(ids);
+
+      // 3. Custom degrees owned by this user
+      const { data: customDegrees } = await db
+        .from('degrees')
+        .select('id')
+        .eq('is_custom', true)
+        .eq('created_by_user_id', userId);
+
+      const idSet = new Set<number>();
+      (rows ?? []).forEach((r: any) => idSet.add(r.degree_id));
+      if (user?.degree_id) idSet.add(user.degree_id);
+      (customDegrees ?? []).forEach((d: any) => idSet.add(d.id));
+
+      return NextResponse.json([...idSet]);
     }
 
     const { data: degrees, error } = await db
