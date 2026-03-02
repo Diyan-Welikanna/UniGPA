@@ -29,28 +29,38 @@ export default function AdminDegreeEditorPage() {
 
   const [degree, setDegree] = useState<DegreeInfo | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
-    if (status !== 'authenticated') return;   // wait — covers 'loading' too
-    if (session.user.role !== 'SUPERADMIN') { router.replace('/dashboard'); return; }
+    if (status === 'loading') return;
+    if (status === 'unauthenticated') { router.replace('/login'); return; }
+    if (session?.user?.role !== 'SUPERADMIN') { router.replace('/dashboard'); return; }
     load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   const showFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(''), 3000); };
 
   const load = async () => {
-    setIsLoading(true);
+    setLoadError('');
     try {
       const [degreesRes, templatesRes] = await Promise.all([
         fetch('/api/degrees'),
         fetch(`/api/admin/degrees/${degreeId}/subjects`),
       ]);
+
+      if (!degreesRes.ok || !templatesRes.ok) {
+        setLoadError('Failed to load data. Please refresh the page.');
+        setDataLoaded(true);
+        return;
+      }
+
       const allDegrees: DegreeInfo[] = await degreesRes.json();
       const deg = allDegrees.find((d) => d.id === degreeId) ?? null;
       setDegree(deg);
@@ -58,8 +68,9 @@ export default function AdminDegreeEditorPage() {
       setTemplates(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load degree templates:', err);
+      setLoadError('Failed to load data. Please refresh the page.');
     } finally {
-      setIsLoading(false);
+      setDataLoaded(true);
     }
   };
 
@@ -112,10 +123,23 @@ export default function AdminDegreeEditorPage() {
   // Group templates by year → semester
   const years = [...new Set(templates.map((t) => t.year))].sort();
 
-  if (status === 'loading' || isLoading) {
+  if (status === 'loading' || !dataLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0f1117]">
         <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0f1117]">
+        <div className="text-center">
+          <p className="text-red-400 font-medium mb-4">{loadError}</p>
+          <button onClick={load} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-500 transition">
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
