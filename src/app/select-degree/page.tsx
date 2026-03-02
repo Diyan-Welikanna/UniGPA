@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import LoadingScreen from '@/components/LoadingScreen';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 export interface PendingDegree {
   id: number | null; // null = custom not yet in DB
@@ -56,6 +57,7 @@ export default function SelectDegreePage() {
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; confirmLabel?: string; variant?: 'danger' | 'warning' | 'info'; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login');
@@ -112,6 +114,32 @@ export default function SelectDegreePage() {
     setShowCustomForm(false);
     setCustomName('');
     setError('');
+  };
+
+  const handleDeleteDegree = (degree: Degree) => {
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Degree',
+      message: `Permanently delete "${degree.name}" and all its subjects and grades? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        try {
+          const res = await fetch(`/api/degrees/user-degree?id=${degree.id}`, { method: 'DELETE' });
+          if (res.ok) {
+            setDegrees((prev) => prev.filter((d) => d.id !== degree.id));
+            setCommittedDegrees((prev) => prev.filter((d) => d.id !== degree.id));
+            if (selectedId === degree.id) setSelectedId(null);
+          } else {
+            const d = await res.json();
+            setError(d.error ?? 'Failed to delete degree');
+          }
+        } catch {
+          setError('Failed to delete degree');
+        }
+      },
+    });
   };
 
   const handleConfirm = async () => {
@@ -227,11 +255,21 @@ export default function SelectDegreePage() {
           <p className="text-xs text-slate-500">{degree.totalYears}y · {degree.semestersPerYear} sem/yr</p>
         )}
         {isSelected && (
-          <div className="mt-2 flex items-center gap-1">
-            <span className={`w-4 h-4 rounded-full ${checkColor} flex items-center justify-center`}>
-              <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-            </span>
-            <span className={`text-xs font-semibold ${checkText}`}>Selected</span>
+          <div className="mt-2 flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <span className={`w-4 h-4 rounded-full ${checkColor} flex items-center justify-center`}>
+                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              </span>
+              <span className={`text-xs font-semibold ${checkText}`}>Selected</span>
+            </div>
+            {accent === 'emerald' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDeleteDegree(degree); }}
+                className="text-[10px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded-md hover:bg-red-500/20 transition font-medium border border-red-500/20"
+              >
+                Delete
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -358,6 +396,16 @@ export default function SelectDegreePage() {
 
         {/* No longer show the continue button or error at the bottom */}
       </div>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        variant={confirmDialog.variant}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
+      />
     </div>
   );
 }

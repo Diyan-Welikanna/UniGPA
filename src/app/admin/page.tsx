@@ -3,6 +3,8 @@
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import LoadingScreen from '@/components/LoadingScreen';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 interface AdminUser {
   id: number;
@@ -36,6 +38,7 @@ export default function AdminPage() {
   const [degreeForm, setDegreeForm] = useState({ name: '', totalYears: '4', semestersPerYear: '2' });
   const [degreeFormErr, setDegreeFormErr] = useState('');
   const [savingDegree, setSavingDegree] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; confirmLabel?: string; variant?: 'danger' | 'warning' | 'info'; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   useEffect(() => {
     if (status !== 'authenticated') return;   // wait — covers 'loading' too
@@ -90,16 +93,25 @@ export default function AdminPage() {
     }
   };
 
-  const handleDeleteDegree = async (degree: SystemDegree) => {
-    if (!confirm(`Remove "${degree.name}" from recommendations?`)) return;
-    const res = await fetch(`/api/degrees?id=${degree.id}`, { method: 'DELETE' });
-    if (res.ok) {
-      flash(`"${degree.name}" removed`);
-      fetchDegrees();
-    } else {
-      const d = await res.json();
-      flash(d.error ?? 'Error deleting degree');
-    }
+  const handleDeleteDegree = (degree: SystemDegree) => {
+    setConfirmDialog({
+      open: true,
+      title: 'Remove Degree',
+      message: `Remove "${degree.name}" from recommended degrees? This will delete its template subjects.`,
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        const res = await fetch(`/api/degrees?id=${degree.id}`, { method: 'DELETE' });
+        if (res.ok) {
+          flash(`"${degree.name}" removed`);
+          fetchDegrees();
+        } else {
+          const d = await res.json();
+          flash(d.error ?? 'Error deleting degree');
+        }
+      },
+    });
   };
 
   const handleRoleToggle = async (user: AdminUser) => {
@@ -118,16 +130,25 @@ export default function AdminPage() {
     }
   };
 
-  const handleDelete = async (user: AdminUser) => {
-    if (!confirm(`Delete ${user.name} (${user.email}) and all their data?`)) return;
-    const res = await fetch(`/api/admin/users?id=${user.id}`, { method: 'DELETE' });
-    if (res.ok) {
-      flash(`${user.name} deleted`);
-      fetchUsers();
-    } else {
-      const d = await res.json();
-      flash(d.error ?? 'Error deleting user');
-    }
+  const handleDelete = (user: AdminUser) => {
+    setConfirmDialog({
+      open: true,
+      title: 'Delete User',
+      message: `Permanently delete ${user.name} (${user.email}) and all their subjects, grades, and degrees? This cannot be undone.`,
+      confirmLabel: 'Delete User',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        const res = await fetch(`/api/admin/users?id=${user.id}`, { method: 'DELETE' });
+        if (res.ok) {
+          flash(`${user.name} deleted`);
+          fetchUsers();
+        } else {
+          const d = await res.json();
+          flash(d.error ?? 'Error deleting user');
+        }
+      },
+    });
   };
 
   if (status === 'loading' || isLoading) {
@@ -155,7 +176,7 @@ export default function AdminPage() {
               My Dashboard
             </button>
             <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={() => setConfirmDialog({ open: true, title: 'Logout', message: 'Are you sure you want to log out of UniGPA?', confirmLabel: 'Logout', variant: 'info', onConfirm: () => signOut({ callbackUrl: '/login' }) })}
               className="text-sm bg-red-500/10 text-red-400 px-3 py-1.5 rounded-lg hover:bg-red-500/20 transition font-medium border border-red-500/20"
             >
               Logout
@@ -380,6 +401,16 @@ export default function AdminPage() {
           </div>
         </div>
       </main>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        variant={confirmDialog.variant}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
+      />
     </div>
   );
 }

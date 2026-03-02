@@ -2,6 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import LoadingScreen from '@/components/LoadingScreen';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useRouter, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -37,6 +38,7 @@ export default function AdminDegreeEditorPage() {
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; confirmLabel?: string; variant?: 'danger' | 'warning' | 'info'; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -115,10 +117,19 @@ export default function AdminDegreeEditorPage() {
     if (res.ok) { setEditingId(null); load(); showFlash('Updated'); }
   };
 
-  const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`Remove "${name}" from this template?`)) return;
-    const res = await fetch(`/api/admin/degrees/${degreeId}/subjects?templateId=${id}`, { method: 'DELETE' });
-    if (res.ok) { load(); showFlash(`"${name}" removed`); }
+  const handleDelete = (id: number, name: string) => {
+    setConfirmDialog({
+      open: true,
+      title: 'Remove Subject',
+      message: `Remove "${name}" from this degree template? Users who haven't graded it yet will no longer see it.`,
+      confirmLabel: 'Remove',
+      variant: 'warning',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        const res = await fetch(`/api/admin/degrees/${degreeId}/subjects?templateId=${id}`, { method: 'DELETE' });
+        if (res.ok) { load(); showFlash(`"${name}" removed`); }
+      },
+    });
   };
 
   // Group templates by year → semester
@@ -314,6 +325,16 @@ export default function AdminDegreeEditorPage() {
           })
         )}
       </main>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        variant={confirmDialog.variant}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
+      />
     </div>
   );
 }

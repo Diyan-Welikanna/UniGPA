@@ -4,6 +4,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import LoadingScreen from '@/components/LoadingScreen';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 const PENDING_DEGREE_KEY = 'gpa_pending_degree';
 
@@ -51,6 +52,7 @@ export default function DashboardPage() {
   const [publishMsg, setPublishMsg] = useState('');
   const [publishing, setPublishing] = useState(false);
   const [systemDegrees, setSystemDegrees] = useState<{ id: number; name: string }[]>([]);
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; confirmLabel?: string; variant?: 'danger' | 'warning' | 'info'; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   // Load pending degree from sessionStorage and resolve degree name
   useEffect(() => {
@@ -207,14 +209,23 @@ export default function DashboardPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this subject?')) return;
-    try {
-      const res = await fetch(`/api/subjects/${id}`, { method: 'DELETE' });
-      if (res.ok) fetchSubjects();
-    } catch (err) {
-      console.error(err);
-    }
+  const handleDelete = (id: number) => {
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Subject',
+      message: 'This will permanently remove this subject and its grade. This action cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        try {
+          const res = await fetch(`/api/subjects/${id}`, { method: 'DELETE' });
+          if (res.ok) fetchSubjects();
+        } catch (err) {
+          console.error(err);
+        }
+      },
+    });
   };
 
   const gpaColor = (gpa: number) => {
@@ -263,7 +274,7 @@ export default function DashboardPage() {
 
             {/* Logout — far right */}
             <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={() => setConfirmDialog({ open: true, title: 'Logout', message: 'Are you sure you want to log out of UniGPA?', confirmLabel: 'Logout', variant: 'info', onConfirm: () => signOut({ callbackUrl: '/login' }) })}
               className="text-sm bg-red-500/10 text-red-400 px-4 py-2 rounded-lg hover:bg-red-500/20 transition font-semibold border border-red-500/25"
             >
               Logout
@@ -697,6 +708,17 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        variant={confirmDialog.variant}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
+      />
     </div>
   );
 }
