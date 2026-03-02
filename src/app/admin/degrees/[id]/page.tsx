@@ -46,15 +46,21 @@ export default function AdminDegreeEditorPage() {
 
   const load = async () => {
     setIsLoading(true);
-    const [degreesRes, templatesRes] = await Promise.all([
-      fetch('/api/degrees'),
-      fetch(`/api/admin/degrees/${degreeId}/subjects`),
-    ]);
-    const allDegrees: DegreeInfo[] = await degreesRes.json();
-    const deg = allDegrees.find((d) => d.id === degreeId) ?? null;
-    setDegree(deg);
-    setTemplates(await templatesRes.json());
-    setIsLoading(false);
+    try {
+      const [degreesRes, templatesRes] = await Promise.all([
+        fetch('/api/degrees'),
+        fetch(`/api/admin/degrees/${degreeId}/subjects`),
+      ]);
+      const allDegrees: DegreeInfo[] = await degreesRes.json();
+      const deg = allDegrees.find((d) => d.id === degreeId) ?? null;
+      setDegree(deg);
+      const data = await templatesRes.json();
+      setTemplates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load degree templates:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleAdd = async (e: React.FormEvent) => {

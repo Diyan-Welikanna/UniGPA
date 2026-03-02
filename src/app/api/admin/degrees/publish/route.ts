@@ -25,10 +25,17 @@ export async function POST(req: NextRequest) {
 
   if (!degreeId) return NextResponse.json({ error: 'degreeId or newName required' }, { status: 400 });
 
+  // Get admin's current degree so we only publish subjects from that degree
+  const { data: adminUser } = await db.from('users').select('degree_id').eq('id', userId).single();
+  if (!adminUser?.degree_id) {
+    return NextResponse.json({ error: 'You have no active degree selected' }, { status: 400 });
+  }
+
   const { data: subjects } = await db
     .from('subjects')
     .select('subject_name, credits, year, semester')
     .eq('user_id', userId)
+    .eq('degree_id', adminUser.degree_id)
     .order('year').order('semester').order('subject_name');
 
   if (!subjects || subjects.length === 0) {
