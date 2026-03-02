@@ -1,6 +1,7 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
+import LoadingScreen from '@/components/LoadingScreen';
 import { useRouter, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -124,11 +125,7 @@ export default function AdminDegreeEditorPage() {
   const years = [...new Set(templates.map((t) => t.year))].sort();
 
   if (status === 'loading' || !dataLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0f1117]">
-        <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (loadError) {
