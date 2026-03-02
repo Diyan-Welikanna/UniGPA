@@ -87,9 +87,12 @@ export default function DashboardPage() {
     } else if (session?.user?.degreeId) {
       fetch('/api/degrees')
         .then((r) => r.json())
-        .then((degrees: { id: number; name: string }[]) => {
+        .then((degrees: { id: number; name: string; totalYears: number; semestersPerYear: number; isCustom: boolean }[]) => {
           const d = degrees.find((x) => x.id === session.user.degreeId);
-          if (d) setDegreeName(d.name);
+          if (d) {
+            setDegreeName(d.name);
+            setPendingDegree({ id: d.id, name: d.name, totalYears: d.totalYears, semestersPerYear: d.semestersPerYear, isCustom: d.isCustom });
+          }
         })
         .catch(() => {});
     }
@@ -133,7 +136,7 @@ export default function DashboardPage() {
   };
 
   const computeGPA = (list: SubjectWithResult[]) => {
-    const graded = list.filter((s) => s.result);
+    const graded = list.filter((s) => s.result && s.result.status !== 'Incomplete');
     if (graded.length === 0) return 0;
     const totalPoints = graded.reduce(
       (sum, s) => sum + s.result!.grade_point * s.credits,
@@ -352,21 +355,27 @@ export default function DashboardPage() {
               { label: 'Semester 2', items: sem2 },
             ].filter((s) => s.items.length > 0);
 
-            const SubjectRow = ({ subject }: { subject: SubjectWithResult }) => (
-              <div className={`px-4 py-2.5 flex items-center gap-2 hover:bg-white/[0.03] transition ${subject.isTemplate ? 'opacity-70' : ''}`}>
+            const SubjectRow = ({ subject }: { subject: SubjectWithResult }) => {
+              const isIncomplete = subject.result?.status === 'Incomplete';
+              return (
+              <div className={`px-4 py-2.5 flex items-center gap-2 hover:bg-white/[0.03] transition ${subject.isTemplate ? 'opacity-70' : ''} ${isIncomplete ? 'opacity-60' : ''}`}>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-slate-200 text-sm truncate">
                     {subject.subject_name}
                     {subject.isTemplate && (
                       <span className="ml-1.5 text-[10px] bg-indigo-500/15 text-indigo-400 px-1.5 py-0.5 rounded font-medium align-middle">Template</span>
                     )}
+                    {isIncomplete && (
+                      <span className="ml-1.5 text-[10px] bg-orange-500/15 text-orange-400 px-1.5 py-0.5 rounded font-medium align-middle">Incomplete</span>
+                    )}
                   </p>
                   <p className="text-xs text-slate-500">{subject.credits} cr</p>
                 </div>
                 <div className="shrink-0">
                   {subject.result ? (
-                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                      subject.result.grade_point >= 3.5 ? 'bg-emerald-500/20 text-emerald-400'
+                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold ${isIncomplete
+                      ? 'bg-orange-500/15 text-orange-400/60 line-through'
+                      : subject.result.grade_point >= 3.5 ? 'bg-emerald-500/20 text-emerald-400'
                       : subject.result.grade_point >= 3.0 ? 'bg-blue-500/20 text-blue-400'
                       : subject.result.grade_point >= 2.0 ? 'bg-amber-500/20 text-amber-400'
                       : 'bg-red-500/20 text-red-400'
@@ -413,7 +422,8 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
-            );
+              );
+            };
 
             return (
               <div key={year} className="bg-[#1c1f2e] rounded-2xl border border-white/[0.06] overflow-hidden">
@@ -478,22 +488,23 @@ export default function DashboardPage() {
                 className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
               />
               <div className="grid grid-cols-3 gap-3">
-                <input
+                <select
                   name="year"
-                  type="number"
-                  min="1"
-                  max="10"
-                  placeholder="Year"
                   required
-                  className="px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
-                />
+                  className="px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
+                >
+                  {Array.from({ length: pendingDegree?.totalYears ?? 4 }, (_, i) => i + 1).map((y) => (
+                    <option key={y} value={y} className="bg-[#1c1f2e]">Year {y}</option>
+                  ))}
+                </select>
                 <select
                   name="semester"
                   required
                   className="px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
                 >
-                  <option value="1" className="bg-[#1c1f2e]">Sem 1</option>
-                  <option value="2" className="bg-[#1c1f2e]">Sem 2</option>
+                  {Array.from({ length: pendingDegree?.semestersPerYear ?? 2 }, (_, i) => i + 1).map((s) => (
+                    <option key={s} value={s} className="bg-[#1c1f2e]">Sem {s}</option>
+                  ))}
                 </select>
                 <input
                   name="credits"
@@ -536,18 +547,24 @@ export default function DashboardPage() {
             <form onSubmit={handleAddGrade} className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Grade Point (0.00 - 4.00)
+                  Grade
                 </label>
-                <input
+                <select
                   name="grade_point"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="4"
                   required
-                  defaultValue={editGrade?.grade_point ?? ''}
+                  defaultValue={editGrade?.grade_point?.toString() ?? ''}
                   className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
-                />
+                >
+                  <option value="" disabled className="bg-[#1c1f2e]">Select grade</option>
+                  <option value="4.0" className="bg-[#1c1f2e]">A+  —  4.0</option>
+                  <option value="4.0" className="bg-[#1c1f2e]">A   —  4.0</option>
+                  <option value="3.7" className="bg-[#1c1f2e]">A-  —  3.7</option>
+                  <option value="3.3" className="bg-[#1c1f2e]">B+  —  3.3</option>
+                  <option value="3.0" className="bg-[#1c1f2e]">B   —  3.0</option>
+                  <option value="2.7" className="bg-[#1c1f2e]">B-  —  2.7</option>
+                  <option value="2.3" className="bg-[#1c1f2e]">C+  —  2.3</option>
+                  <option value="2.0" className="bg-[#1c1f2e]">C   —  2.0</option>
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">
